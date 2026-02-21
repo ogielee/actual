@@ -10,6 +10,9 @@ import type { Message } from './sync';
 export const BUDGET_TYPES = ['tracking', 'envelope'] as const;
 export type BudgetType = (typeof BUDGET_TYPES)[number];
 
+export const BUDGET_FREQUENCIES = ['monthly', 'weekly'] as const;
+export type BudgetFrequency = (typeof BUDGET_FREQUENCIES)[number];
+
 export const UPCOMING_SCHEDULED_TRANSACTION_LENGTHS = [
   '1',
   '7',

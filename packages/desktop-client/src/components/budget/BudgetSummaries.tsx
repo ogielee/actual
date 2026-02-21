@@ -11,7 +11,7 @@ import { animated, useSpring } from 'react-spring';
 import { View } from '@actual-app/components/view';
 import { css } from '@emotion/css';
 
-import { addMonths, subMonths } from 'loot-core/shared/months';
+import { nextMonth, prevMonth } from 'loot-core/shared/months';
 
 import { MonthsContext } from './MonthsContext';
 
@@ -38,8 +38,8 @@ export function BudgetSummaries() {
   const prevMonth0 = useRef(firstMonth);
   const allMonths = useMemo(() => {
     const all = [...months];
-    all.unshift(subMonths(firstMonth, 1));
-    all.push(addMonths(months[months.length - 1], 1));
+    all.unshift(prevMonth(firstMonth));
+    all.push(nextMonth(months[months.length - 1]));
     return all;
   }, [months, firstMonth]);
   const monthWidth = widthState / months.length;

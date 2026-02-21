@@ -57,7 +57,7 @@ export function isReflectBudget(): boolean {
 }
 
 function dbMonth(month: string): number {
-  return parseInt(month.replace('-', ''));
+  return parseInt(month.replace(/-/g, ''));
 }
 
 // TODO: complete list of fields.

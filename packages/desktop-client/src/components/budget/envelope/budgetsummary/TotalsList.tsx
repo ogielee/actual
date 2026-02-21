@@ -12,6 +12,7 @@ import { EnvelopeCellValue } from '@desktop-client/components/budget/envelope/En
 import { CellValueText } from '@desktop-client/components/spreadsheet/CellValue';
 import { useFormat } from '@desktop-client/hooks/useFormat';
 import type { FormatType } from '@desktop-client/hooks/useFormat';
+import { useSyncedPref } from '@desktop-client/hooks/useSyncedPref';
 import { envelopeBudget } from '@desktop-client/spreadsheet/bindings';
 
 /**
@@ -50,6 +51,8 @@ export function TotalsList({ prevMonthName, style }: TotalsListProps) {
   const format = useFormat();
   const signedFormatter = makeSignedFormatter(format);
   const invertedSignedFormatter = makeSignedFormatter(format, true);
+  const [budgetFrequency = 'monthly'] = useSyncedPref('budgetFrequency');
+  const isWeekly = budgetFrequency === 'weekly';
   return (
     <View
       style={{
@@ -155,7 +158,11 @@ export function TotalsList({ prevMonthName, style }: TotalsListProps) {
         </Block>
 
         <Block>
-          <Trans>For next month</Trans>
+          {isWeekly ? (
+            <Trans>For next week</Trans>
+          ) : (
+            <Trans>For next month</Trans>
+          )}
         </Block>
       </View>
     </View>

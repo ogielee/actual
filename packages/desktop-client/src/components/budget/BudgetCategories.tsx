@@ -248,7 +248,17 @@ export const BudgetCategories = memo<BudgetCategoriesProps>(
           flex: 1,
         }}
       >
-        {items.map((item, idx) => {
+        {(() => {
+          let categoryIndex = 0;
+          return items.map((item, idx) => {
+          const isCategory =
+            item.type === 'expense-category' ||
+            item.type === 'income-category';
+          if (isCategory) categoryIndex++;
+          const stripeStyle =
+            isCategory && categoryIndex % 2 === 0
+              ? { backgroundColor: theme.tableRowBackgroundHighlight }
+              : {};
           let content;
           switch (item.type) {
             case 'new-group':
@@ -390,8 +400,9 @@ export const BudgetCategories = memo<BudgetCategoriesProps>(
               <View
                 style={
                   dragState
-                    ? {}
+                    ? stripeStyle
                     : {
+                        ...stripeStyle,
                         ':hover': { backgroundColor: theme.budgetCurrentMonth },
                       }
                 }
@@ -400,7 +411,8 @@ export const BudgetCategories = memo<BudgetCategoriesProps>(
               </View>
             </DropHighlightPosContext.Provider>
           );
-        })}
+          });
+        })()}
       </View>
     );
   },

@@ -4,6 +4,8 @@ import type { ReactNode } from 'react';
 
 import * as monthUtils from 'loot-core/shared/months';
 
+import { useSyncedPref } from '@desktop-client/hooks/useSyncedPref';
+
 export type MonthBounds = {
   start: string;
   end: string;
@@ -42,9 +44,17 @@ export function MonthsProvider({
   type,
   children,
 }: MonthsProviderProps) {
-  const endMonth = monthUtils.addMonths(startMonth, numMonths - 1);
+  const [budgetFrequency = 'monthly'] = useSyncedPref('budgetFrequency');
+  const [firstDayOfWeekIdx] = useSyncedPref('firstDayOfWeekIdx');
+  const isWeekly = budgetFrequency === 'weekly';
+
+  const endMonth = isWeekly
+    ? monthUtils.addWeeks(startMonth, numMonths - 1)
+    : monthUtils.addMonths(startMonth, numMonths - 1);
   const bounds = getValidMonthBounds(monthBounds, startMonth, endMonth);
-  const months = monthUtils.rangeInclusive(bounds.start, bounds.end);
+  const months = isWeekly
+    ? monthUtils.weekRangeInclusive(bounds.start, bounds.end, firstDayOfWeekIdx)
+    : monthUtils.rangeInclusive(bounds.start, bounds.end);
 
   return (
     <MonthsContext.Provider value={{ months, type }}>

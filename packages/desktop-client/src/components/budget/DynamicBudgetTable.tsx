@@ -13,6 +13,7 @@ import { BudgetPageHeader } from './BudgetPageHeader';
 import { BudgetTable } from './BudgetTable';
 
 import { useGlobalPref } from '@desktop-client/hooks/useGlobalPref';
+import { useSyncedPref } from '@desktop-client/hooks/useSyncedPref';
 
 function getNumPossibleMonths(width: number, categoryWidth: number) {
   const estimatedTableWidth = width - categoryWidth;
@@ -51,6 +52,9 @@ const DynamicBudgetTable = ({
   const { setDisplayMax } = useBudgetMonthCount();
   const [categoryExpandedStatePref] = useGlobalPref('categoryExpandedState');
   const categoryExpandedState = categoryExpandedStatePref ?? 0;
+  const [budgetFrequency = 'monthly'] = useSyncedPref('budgetFrequency');
+  const [firstDayOfWeekIdx] = useSyncedPref('firstDayOfWeekIdx');
+  const isWeekly = budgetFrequency === 'weekly';
 
   const numPossible = getNumPossibleMonths(
     width,
@@ -104,22 +108,26 @@ const DynamicBudgetTable = ({
   useHotkeys(
     '0',
     () => {
+      const currentPeriod = isWeekly
+        ? monthUtils.currentWeek(firstDayOfWeekIdx)
+        : monthUtils.currentMonth();
+      const offset =
+        type === 'envelope'
+          ? Math.floor((numMonths - 1) / 2)
+          : numMonths === 2
+            ? 1
+            : Math.max(numMonths - 2, 0);
       _onMonthSelect(
-        monthUtils.subMonths(
-          monthUtils.currentMonth(),
-          type === 'envelope'
-            ? Math.floor((numMonths - 1) / 2)
-            : numMonths === 2
-              ? 1
-              : Math.max(numMonths - 2, 0),
-        ),
+        isWeekly
+          ? monthUtils.subWeeks(currentPeriod, offset)
+          : monthUtils.subMonths(currentPeriod, offset),
       );
     },
     {
       preventDefault: true,
       scopes: ['app'],
     },
-    [_onMonthSelect, startMonth, numMonths],
+    [_onMonthSelect, startMonth, numMonths, isWeekly, firstDayOfWeekIdx],
   );
 
   return (

@@ -161,6 +161,9 @@ export function currentDay(): string {
 }
 
 export function nextMonth(month: DateLike): string {
+  if (typeof month === 'string' && month.length === 10) {
+    return addWeeks(month, 1);
+  }
   return d.format(d.addMonths(_parse(month), 1), 'yyyy-MM');
 }
 
@@ -169,6 +172,9 @@ export function prevYear(month: DateLike, format = 'yyyy-MM'): string {
 }
 
 export function prevMonth(month: DateLike): string {
+  if (typeof month === 'string' && month.length === 10) {
+    return subWeeks(month, 1);
+  }
   return d.format(d.subMonths(_parse(month), 1), 'yyyy-MM');
 }
 
@@ -237,6 +243,13 @@ export function isCurrentDay(day: DateLike): boolean {
 // TODO: This doesn't really fit in this module anymore, should
 // probably live elsewhere
 export function bounds(month: DateLike): { start: number; end: number } {
+  if (typeof month === 'string' && month.length === 10) {
+    const parsed = _parse(month);
+    return {
+      start: parseInt(d.format(parsed, 'yyyyMMdd')),
+      end: parseInt(d.format(d.addDays(parsed, 6), 'yyyyMMdd')),
+    };
+  }
   return {
     start: parseInt(d.format(d.startOfMonth(_parse(month)), 'yyyyMMdd')),
     end: parseInt(d.format(d.endOfMonth(_parse(month)), 'yyyyMMdd')),
@@ -396,10 +409,13 @@ export function getYearEnd(month: string): string {
 }
 
 export function sheetForMonth(month: string): string {
-  return 'budget' + month.replace('-', '');
+  return 'budget' + month.replace(/-/g, '');
 }
 
 export function nameForMonth(month: DateLike, locale?: Locale): string {
+  if (typeof month === 'string' && month.length === 10) {
+    return d.format(_parse(month), "RRRR-'W'II");
+  }
   return d.format(_parse(month), "MMMM ''yy", { locale });
 }
 

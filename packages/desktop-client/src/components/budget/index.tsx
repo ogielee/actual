@@ -43,13 +43,19 @@ export function Budget() {
   const [summaryCollapsed, setSummaryCollapsedPref] = useLocalPref(
     'budget.summaryCollapsed',
   );
+  const [budgetType = 'envelope'] = useSyncedPref('budgetType');
+  const [budgetFrequency = 'monthly'] = useSyncedPref('budgetFrequency');
+  const [firstDayOfWeekIdx] = useSyncedPref('firstDayOfWeekIdx');
   const [startMonthPref, setStartMonthPref] = useLocalPref('budget.startMonth');
-  const startMonth = startMonthPref || currentMonth;
+  const currentPeriod =
+    budgetFrequency === 'weekly'
+      ? monthUtils.currentWeek(firstDayOfWeekIdx)
+      : currentMonth;
+  const startMonth = startMonthPref || currentPeriod;
   const [bounds, setBounds] = useState({
     start: startMonth,
     end: startMonth,
   });
-  const [budgetType = 'envelope'] = useSyncedPref('budgetType');
   const [maxMonthsPref] = useGlobalPref('maxMonths');
   const maxMonths = maxMonthsPref || 1;
   const [initialized, setInitialized] = useState(false);
@@ -96,19 +102,19 @@ export function Budget() {
     // heuristic that will fail if the user clicks an arbitrary month,
     // but it will just load in some unnecessary data.
     if (month < startMonth) {
-      // pre-warm prev month
+      // pre-warm prev period
       await prewarmMonth(
         budgetType,
         spreadsheet,
-        monthUtils.subMonths(month, 1),
+        monthUtils.prevMonth(month),
       );
     } else if (month > startMonth) {
-      // pre-warm next month
-      await prewarmMonth(
-        budgetType,
-        spreadsheet,
-        monthUtils.addMonths(month, numDisplayed),
-      );
+      // pre-warm next period
+      const nextPeriod =
+        month.length === 10
+          ? monthUtils.addWeeks(month, numDisplayed)
+          : monthUtils.addMonths(month, numDisplayed);
+      await prewarmMonth(budgetType, spreadsheet, nextPeriod);
     }
 
     if (warmingMonth === month) {

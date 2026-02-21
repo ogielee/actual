@@ -19,6 +19,7 @@ import * as goalActions from './goal-template';
 import * as goalNoteActions from './template-notes';
 
 export type BudgetHandlers = {
+  'budget/migrate-monthly-to-weekly': typeof budget.migrateMonthlyToWeekly;
   'budget/budget-amount': typeof actions.setBudget;
   'budget/copy-previous-month': typeof actions.copyPreviousMonth;
   'budget/copy-single-month': typeof actions.copySinglePreviousMonth;
@@ -63,6 +64,10 @@ export type BudgetHandlers = {
 
 export const app = createApp<BudgetHandlers>();
 
+app.method(
+  'budget/migrate-monthly-to-weekly',
+  mutator(budget.migrateMonthlyToWeekly),
+);
 app.method('budget/budget-amount', mutator(undoable(actions.setBudget)));
 app.method(
   'budget/copy-previous-month',

@@ -16,6 +16,7 @@ import { isElectron } from 'loot-core/shared/environment';
 
 import { AuthSettings } from './AuthSettings';
 import { Backups } from './Backups';
+import { BudgetFrequencySettings } from './BudgetFrequencySettings';
 import { BudgetTypeSettings } from './BudgetTypeSettings';
 import { CurrencySettings } from './Currency';
 import { EncryptionSettings } from './Encryption';
@@ -249,6 +250,7 @@ export function Settings() {
         <AuthSettings />
         <EncryptionSettings />
         <BudgetTypeSettings />
+        <BudgetFrequencySettings />
         {isElectron() && <Backups />}
         <ExportBudget />
         <AdvancedToggle>

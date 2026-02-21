@@ -23,6 +23,7 @@ import { useEnvelopeBudget } from '@desktop-client/components/budget/envelope/En
 import { NotesButton } from '@desktop-client/components/NotesButton';
 import { useLocale } from '@desktop-client/hooks/useLocale';
 import { SheetNameProvider } from '@desktop-client/hooks/useSheetName';
+import { useSyncedPref } from '@desktop-client/hooks/useSyncedPref';
 import { useUndo } from '@desktop-client/hooks/useUndo';
 
 type BudgetSummaryProps = {
@@ -36,6 +37,10 @@ export const BudgetSummary = memo(({ month }: BudgetSummaryProps) => {
     onBudgetAction,
     onToggleSummaryCollapse,
   } = useEnvelopeBudget();
+
+  const [budgetFrequency = 'monthly'] = useSyncedPref('budgetFrequency');
+  const [firstDayOfWeekIdx] = useSyncedPref('firstDayOfWeekIdx');
+  const isWeekly = budgetFrequency === 'weekly';
 
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef(null);
@@ -59,7 +64,9 @@ export const BudgetSummary = memo(({ month }: BudgetSummaryProps) => {
     ? SvgArrowButtonDown1
     : SvgArrowButtonUp1;
 
-  const displayMonth = monthUtils.format(month, "MMMM ''yy", locale);
+  const displayMonth = isWeekly
+    ? monthUtils.nameForMonth(month)
+    : monthUtils.format(month, "MMMM ''yy", locale);
   const { t } = useTranslation();
 
   return (
@@ -121,20 +128,54 @@ export const BudgetSummary = memo(({ month }: BudgetSummaryProps) => {
             </Button>
           </View>
 
-          <div
-            className={css([
-              {
-                textAlign: 'center',
-                marginTop: 3,
-                fontSize: 18,
-                fontWeight: 500,
-                textDecorationSkip: 'ink',
-              },
-              currentMonth === month && { fontWeight: 'bold' },
-            ])}
-          >
-            {monthUtils.format(month, 'MMMM', locale)}
-          </div>
+          {isWeekly ? (
+            <View style={{ alignItems: 'center', marginTop: 3 }}>
+              <div
+                className={css([
+                  {
+                    textAlign: 'center',
+                    fontSize: 18,
+                    fontWeight: 500,
+                    textDecorationSkip: 'ink',
+                  },
+                  currentMonth === month && { fontWeight: 'bold' },
+                ])}
+              >
+                {`WEEK ${parseInt(monthUtils.format(month, 'II'))}`}
+              </div>
+              <div
+                style={{
+                  textAlign: 'center',
+                  fontSize: 12,
+                  color: theme.pageTextSubdued,
+                  marginTop: 2,
+                }}
+              >
+                {monthUtils.format(month, 'MMM d', locale)}
+                {' – '}
+                {monthUtils.format(
+                  monthUtils.getWeekEnd(month, firstDayOfWeekIdx),
+                  'MMM d',
+                  locale,
+                )}
+              </div>
+            </View>
+          ) : (
+            <div
+              className={css([
+                {
+                  textAlign: 'center',
+                  marginTop: 3,
+                  fontSize: 18,
+                  fontWeight: 500,
+                  textDecorationSkip: 'ink',
+                },
+                currentMonth === month && { fontWeight: 'bold' },
+              ])}
+            >
+              {monthUtils.format(month, 'MMMM', locale)}
+            </div>
+          )}
 
           <View
             style={{

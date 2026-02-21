@@ -17,7 +17,87 @@ export function getBudgetType() {
   return meta.budgetType || 'envelope';
 }
 
+export function isWeeklyBudget(): boolean {
+  const freq = db.firstSync<Pick<db.DbPreference, 'value'>>(
+    `SELECT value FROM preferences WHERE id = ?`,
+    ['budgetFrequency'],
+  );
+  return (freq?.value ?? 'monthly') === 'weekly';
+}
+
+// Migrates monthly budget amounts into the first week of each month.
+// Called once when the user switches from monthly to weekly budgeting.
+// Monthly budget entries have 6-digit month integers (e.g., 202501).
+// Weekly entries use 8-digit integers (e.g., 20250105). This never
+// overwrites an existing weekly entry.
+export async function migrateMonthlyToWeekly(): Promise<void> {
+  const firstDayPref = db.firstSync<Pick<db.DbPreference, 'value'>>(
+    `SELECT value FROM preferences WHERE id = ?`,
+    ['firstDayOfWeekIdx'],
+  );
+  const firstDayIdx = firstDayPref?.value ?? '0';
+
+  const budgetType = getBudgetType();
+  const table =
+    budgetType === 'tracking' ? 'reflect_budgets' : 'zero_budgets';
+
+  // Monthly months are ≤6-digit integers (max 209912); weekly are 8-digit.
+  const monthlyEntries = await db.all<{
+    id: string;
+    month: number;
+    category: string;
+    amount: number;
+  }>(
+    `SELECT id, month, category, amount FROM ${table} WHERE month > 0 AND month <= 999999 AND amount != 0`,
+  );
+
+  for (const entry of monthlyEntries) {
+    const monthStr = String(entry.month).padStart(6, '0');
+    const yyyy = monthStr.slice(0, 4);
+    const mm = monthStr.slice(4, 6);
+    const monthStart = `${yyyy}-${mm}-01`;
+
+    // The week that contains the 1st of the month
+    const firstWeek = monthUtils.weekFromDate(monthStart, firstDayIdx);
+    const weekMonthInt = parseInt(firstWeek.replace(/-/g, ''));
+
+    // Only migrate if no weekly entry exists yet for this category+week
+    const existingWeekly = db.firstSync<{ id: string }>(
+      `SELECT id FROM ${table} WHERE month = ? AND category = ?`,
+      [weekMonthInt, entry.category],
+    );
+
+    if (!existingWeekly) {
+      await budgetActions.setBudget({
+        category: entry.category,
+        month: firstWeek,
+        amount: entry.amount,
+      });
+    }
+  }
+}
+
 export function getBudgetRange(start: string, end: string) {
+  if (isWeeklyBudget()) {
+    const firstDayPref = db.firstSync<Pick<db.DbPreference, 'value'>>(
+      `SELECT value FROM preferences WHERE id = ?`,
+      ['firstDayOfWeekIdx'],
+    );
+    const firstDayIdx = firstDayPref?.value;
+    start = monthUtils.weekFromDate(start, firstDayIdx);
+    end = monthUtils.weekFromDate(end, firstDayIdx);
+    if (start > end) {
+      start = end;
+    }
+    start = monthUtils.subWeeks(start, 12);
+    end = monthUtils.addWeeks(end, 52);
+    return {
+      start,
+      end,
+      range: monthUtils.weekRangeInclusive(start, end, firstDayIdx),
+    };
+  }
+
   start = monthUtils.getMonth(start);
   end = monthUtils.getMonth(end);
 
@@ -98,8 +178,20 @@ function handleTransactionChange(transaction, changedFields) {
     transaction.date &&
     transaction.category
   ) {
-    const month = monthUtils.monthFromDate(db.fromDateRepr(transaction.date));
-    const sheetName = monthUtils.sheetForMonth(month);
+    let period: string;
+    if (isWeeklyBudget()) {
+      const firstDayPref = db.firstSync<Pick<db.DbPreference, 'value'>>(
+        `SELECT value FROM preferences WHERE id = ?`,
+        ['firstDayOfWeekIdx'],
+      );
+      period = monthUtils.weekFromDate(
+        db.fromDateRepr(transaction.date),
+        firstDayPref?.value,
+      );
+    } else {
+      period = monthUtils.monthFromDate(db.fromDateRepr(transaction.date));
+    }
+    const sheetName = monthUtils.sheetForMonth(period);
 
     sheet
       .get()
@@ -289,15 +381,30 @@ export async function createAllBudgets() {
   );
   const earliestDate =
     earliestTransaction && db.fromDateRepr(earliestTransaction.date);
-  const currentMonth = monthUtils.currentMonth();
+
+  const weekly = isWeeklyBudget();
+  const firstDayPref = weekly
+    ? db.firstSync<Pick<db.DbPreference, 'value'>>(
+        `SELECT value FROM preferences WHERE id = ?`,
+        ['firstDayOfWeekIdx'],
+      )
+    : null;
+  const firstDayIdx = firstDayPref?.value;
+
+  const currentPeriod = weekly
+    ? monthUtils.currentWeek(firstDayIdx)
+    : monthUtils.currentMonth();
+
+  const startPeriod = earliestDate
+    ? weekly
+      ? monthUtils.weekFromDate(earliestDate, firstDayIdx)
+      : monthUtils.getMonth(earliestDate)
+    : currentPeriod;
 
   // Get the range based off of the earliest transaction and the
-  // current month. If no transactions currently exist the current
-  // month is also used as the starting month
-  const { start, end, range } = getBudgetRange(
-    earliestDate || currentMonth,
-    currentMonth,
-  );
+  // current period. If no transactions currently exist the current
+  // period is also used as the starting period
+  const { start, end, range } = getBudgetRange(startPeriod, currentPeriod);
 
   const meta = sheet.get().meta();
   const createdMonths = meta.createdMonths || new Set();
