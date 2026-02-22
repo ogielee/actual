@@ -630,6 +630,13 @@ type ApplyBudgetActionPayload =
       };
     }
   | {
+      type: 'set-single-4-avg';
+      month: string;
+      args: {
+        category: CategoryEntity['id'];
+      };
+    }
+  | {
       type: 'set-single-6-avg';
       month: string;
       args: {
@@ -642,6 +649,35 @@ type ApplyBudgetActionPayload =
       args: {
         category: CategoryEntity['id'];
       };
+    }
+  | {
+      type: 'set-single-13-avg';
+      month: string;
+      args: {
+        category: CategoryEntity['id'];
+      };
+    }
+  | {
+      type: 'set-single-52-avg';
+      month: string;
+      args: {
+        category: CategoryEntity['id'];
+      };
+    }
+  | {
+      type: 'set-4-avg';
+      month: string;
+      args?: never;
+    }
+  | {
+      type: 'set-13-avg';
+      month: string;
+      args?: never;
+    }
+  | {
+      type: 'set-52-avg';
+      month: string;
+      args?: never;
     }
   | {
       type: 'copy-single-last';
@@ -758,6 +794,13 @@ export function useBudgetActions() {
             category: args.category,
           });
           return null;
+        case 'set-single-4-avg':
+          await send('budget/set-n-month-avg', {
+            month,
+            N: 4,
+            category: args.category,
+          });
+          return null;
         case 'set-single-6-avg':
           await send('budget/set-n-month-avg', {
             month,
@@ -771,6 +814,29 @@ export function useBudgetActions() {
             N: 12,
             category: args.category,
           });
+          return null;
+        case 'set-single-13-avg':
+          await send('budget/set-n-month-avg', {
+            month,
+            N: 13,
+            category: args.category,
+          });
+          return null;
+        case 'set-single-52-avg':
+          await send('budget/set-n-month-avg', {
+            month,
+            N: 52,
+            category: args.category,
+          });
+          return null;
+        case 'set-4-avg':
+          await send('budget/set-n-month-avg', { month, N: 4 });
+          return null;
+        case 'set-13-avg':
+          await send('budget/set-n-month-avg', { month, N: 13 });
+          return null;
+        case 'set-52-avg':
+          await send('budget/set-n-month-avg', { month, N: 52 });
           return null;
         case 'copy-single-last':
           await send('budget/copy-single-month', {

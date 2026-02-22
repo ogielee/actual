@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Menu } from '@actual-app/components/menu';
 
 import { useEnvelopeSheetValue } from '@desktop-client/components/budget/envelope/EnvelopeBudgetComponents';
+import { useSyncedPref } from '@desktop-client/hooks/useSyncedPref';
 import { envelopeBudget } from '@desktop-client/spreadsheet/bindings';
 
 type ToBudgetMenuProps = Omit<
@@ -29,6 +30,8 @@ export function ToBudgetMenu({
   ...props
 }: ToBudgetMenuProps) {
   const { t } = useTranslation();
+  const [budgetFrequency = 'monthly'] = useSyncedPref('budgetFrequency');
+  const isWeekly = budgetFrequency === 'weekly';
 
   const toBudget = useEnvelopeSheetValue(envelopeBudget.toBudget) ?? 0;
   const forNextMonth = useEnvelopeSheetValue(envelopeBudget.forNextMonth) ?? 0;
@@ -48,7 +51,7 @@ export function ToBudgetMenu({
       ? [
           {
             name: 'buffer',
-            text: t('Hold for next month'),
+            text: isWeekly ? t('Hold for next week') : t('Hold for next month'),
           },
         ]
       : []),
@@ -72,7 +75,7 @@ export function ToBudgetMenu({
       ? [
           {
             name: 'reset-buffer',
-            text: t("Reset next month's buffer"),
+            text: isWeekly ? t("Reset next week's buffer") : t("Reset next month's buffer"),
           },
         ]
       : []),

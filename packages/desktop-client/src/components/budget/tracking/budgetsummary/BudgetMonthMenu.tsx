@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Menu } from '@actual-app/components/menu';
 
 import { useFeatureFlag } from '@desktop-client/hooks/useFeatureFlag';
+import { useSyncedPref } from '@desktop-client/hooks/useSyncedPref';
 
 type BudgetMonthMenuProps = Omit<
   ComponentPropsWithoutRef<typeof Menu>,
@@ -28,6 +29,8 @@ export function BudgetMonthMenu({
   ...props
 }: BudgetMonthMenuProps) {
   const { t } = useTranslation();
+  const [budgetFrequency = 'monthly'] = useSyncedPref('budgetFrequency');
+  const isWeekly = budgetFrequency === 'weekly';
   const isGoalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
   return (
     <Menu
@@ -43,11 +46,20 @@ export function BudgetMonthMenu({
           case 'set-3-avg':
             onSetMonthsAverage(3);
             break;
+          case 'set-4-avg':
+            onSetMonthsAverage(4);
+            break;
           case 'set-6-avg':
             onSetMonthsAverage(6);
             break;
           case 'set-12-avg':
             onSetMonthsAverage(12);
+            break;
+          case 'set-13-avg':
+            onSetMonthsAverage(13);
+            break;
+          case 'set-52-avg':
+            onSetMonthsAverage(52);
             break;
           case 'check-templates':
             onCheckTemplates();
@@ -62,38 +74,79 @@ export function BudgetMonthMenu({
             throw new Error(`Unrecognized menu option: ${name}`);
         }
       }}
-      items={[
-        { name: 'copy-last', text: t("Copy last month's budget") },
-        { name: 'set-zero', text: t('Set budgets to zero') },
-        {
-          name: 'set-3-avg',
-          text: t('Set budgets to 3 month average'),
-        },
-        {
-          name: 'set-6-avg',
-          text: t('Set budgets to 6 month average'),
-        },
-        {
-          name: 'set-12-avg',
-          text: t('Set budgets to 12 month average'),
-        },
-        ...(isGoalTemplatesEnabled
+      items={
+        isWeekly
           ? [
               {
-                name: 'check-templates',
-                text: t('Check templates'),
+                name: 'copy-last',
+                text: t("Copy last week's budget"),
+              },
+              { name: 'set-zero', text: t('Set budgets to zero') },
+              {
+                name: 'set-4-avg',
+                text: t('Set budgets to 4 week average'),
               },
               {
-                name: 'apply-goal-template',
-                text: t('Apply budget template'),
+                name: 'set-13-avg',
+                text: t('Set budgets to 13 week average'),
               },
               {
-                name: 'overwrite-goal-template',
-                text: t('Overwrite with budget template'),
+                name: 'set-52-avg',
+                text: t('Set budgets to 52 week average'),
               },
+              ...(isGoalTemplatesEnabled
+                ? [
+                    {
+                      name: 'check-templates',
+                      text: t('Check templates'),
+                    },
+                    {
+                      name: 'apply-goal-template',
+                      text: t('Apply budget template'),
+                    },
+                    {
+                      name: 'overwrite-goal-template',
+                      text: t('Overwrite with budget template'),
+                    },
+                  ]
+                : []),
             ]
-          : []),
-      ]}
+          : [
+              {
+                name: 'copy-last',
+                text: t("Copy last month's budget"),
+              },
+              { name: 'set-zero', text: t('Set budgets to zero') },
+              {
+                name: 'set-3-avg',
+                text: t('Set budgets to 3 month average'),
+              },
+              {
+                name: 'set-6-avg',
+                text: t('Set budgets to 6 month average'),
+              },
+              {
+                name: 'set-12-avg',
+                text: t('Set budgets to 12 month average'),
+              },
+              ...(isGoalTemplatesEnabled
+                ? [
+                    {
+                      name: 'check-templates',
+                      text: t('Check templates'),
+                    },
+                    {
+                      name: 'apply-goal-template',
+                      text: t('Apply budget template'),
+                    },
+                    {
+                      name: 'overwrite-goal-template',
+                      text: t('Overwrite with budget template'),
+                    },
+                  ]
+                : []),
+            ]
+      }
     />
   );
 }

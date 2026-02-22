@@ -26,6 +26,7 @@ import { useTrackingBudget } from '@desktop-client/components/budget/tracking/Tr
 import { NotesButton } from '@desktop-client/components/NotesButton';
 import { useLocale } from '@desktop-client/hooks/useLocale';
 import { SheetNameProvider } from '@desktop-client/hooks/useSheetName';
+import { useSyncedPref } from '@desktop-client/hooks/useSyncedPref';
 import { useUndo } from '@desktop-client/hooks/useUndo';
 
 type BudgetSummaryProps = {
@@ -40,6 +41,10 @@ export function BudgetSummary({ month }: BudgetSummaryProps) {
     onBudgetAction,
     onToggleSummaryCollapse,
   } = useTrackingBudget();
+
+  const [budgetFrequency = 'monthly'] = useSyncedPref('budgetFrequency');
+  const [firstDayOfWeekIdx] = useSyncedPref('firstDayOfWeekIdx');
+  const isWeekly = budgetFrequency === 'weekly';
 
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef(null);
@@ -57,7 +62,9 @@ export function BudgetSummary({ month }: BudgetSummaryProps) {
     ? SvgArrowButtonDown1
     : SvgArrowButtonUp1;
 
-  const displayMonth = monthUtils.format(month, "MMMM ''yy", locale);
+  const displayMonth = isWeekly
+    ? monthUtils.nameForMonth(month)
+    : monthUtils.format(month, "MMMM ''yy", locale);
 
   return (
     <View
@@ -117,17 +124,51 @@ export function BudgetSummary({ month }: BudgetSummaryProps) {
             </Button>
           </View>
 
-          <div
-            className={css({
-              textAlign: 'center',
-              marginTop: 3,
-              fontSize: 18,
-              fontWeight: 500,
-              textDecorationSkip: 'ink',
-            })}
-          >
-            {monthUtils.format(month, 'MMMM', locale)}
-          </div>
+          {isWeekly ? (
+            <View style={{ alignItems: 'center', marginTop: 3 }}>
+              <div
+                className={css([
+                  {
+                    textAlign: 'center',
+                    fontSize: 18,
+                    fontWeight: 500,
+                    textDecorationSkip: 'ink',
+                  },
+                  currentMonth === month && { fontWeight: 'bold' },
+                ])}
+              >
+                {`WEEK ${parseInt(monthUtils.format(month, 'II'))}`}
+              </div>
+              <div
+                style={{
+                  textAlign: 'center',
+                  fontSize: 12,
+                  color: theme.pageTextSubdued,
+                  marginTop: 2,
+                }}
+              >
+                {monthUtils.format(month, 'MMM d', locale)}
+                {' – '}
+                {monthUtils.format(
+                  monthUtils.getWeekEnd(month, firstDayOfWeekIdx),
+                  'MMM d',
+                  locale,
+                )}
+              </div>
+            </View>
+          ) : (
+            <div
+              className={css({
+                textAlign: 'center',
+                marginTop: 3,
+                fontSize: 18,
+                fontWeight: 500,
+                textDecorationSkip: 'ink',
+              })}
+            >
+              {monthUtils.format(month, 'MMMM', locale)}
+            </div>
+          )}
 
           <View
             style={{
@@ -171,10 +212,15 @@ export function BudgetSummary({ month }: BudgetSummaryProps) {
                     onBudgetAction(month, 'copy-last');
                     onMenuClose();
                     showUndoNotification({
-                      message: t(
-                        "{{displayMonth}} budgets have all been set to last month's budgeted amounts.",
-                        { displayMonth },
-                      ),
+                      message: isWeekly
+                        ? t(
+                            "{{displayMonth}} budgets have all been set to last week's budgeted amounts.",
+                            { displayMonth },
+                          )
+                        : t(
+                            "{{displayMonth}} budgets have all been set to last month's budgeted amounts.",
+                            { displayMonth },
+                          ),
                     });
                   }}
                   onSetBudgetsToZero={() => {
@@ -191,8 +237,11 @@ export function BudgetSummary({ month }: BudgetSummaryProps) {
                     onBudgetAction(month, `set-${numberOfMonths}-avg`);
                     onMenuClose();
                     showUndoNotification({
-                      message:
-                        numberOfMonths === 12
+                      message: isWeekly
+                        ? t(
+                            `${displayMonth} budgets have all been set to ${numberOfMonths} week average.`,
+                          )
+                        : numberOfMonths === 12
                           ? t(
                               `${displayMonth} budgets have all been set to yearly average.`,
                             )

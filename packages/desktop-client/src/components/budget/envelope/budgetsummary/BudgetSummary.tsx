@@ -54,11 +54,10 @@ export const BudgetSummary = memo(({ month }: BudgetSummaryProps) => {
     setMenuOpen(false);
   }
 
-  const prevMonthName = monthUtils.format(
-    monthUtils.prevMonth(month),
-    'MMM',
-    locale,
-  );
+  const prevPeriod = monthUtils.prevMonth(month);
+  const prevMonthName = isWeekly
+    ? `Wk ${parseInt(monthUtils.format(prevPeriod, 'II'))}`
+    : monthUtils.format(prevPeriod, 'MMM', locale);
 
   const ExpandOrCollapseIcon = collapsed
     ? SvgArrowButtonDown1
@@ -219,10 +218,15 @@ export const BudgetSummary = memo(({ month }: BudgetSummaryProps) => {
                     onBudgetAction(month, 'copy-last');
                     onMenuClose();
                     showUndoNotification({
-                      message: t(
-                        "{{displayMonth}} budgets have all been set to last month's budgeted amounts.",
-                        { displayMonth },
-                      ),
+                      message: isWeekly
+                        ? t(
+                            "{{displayMonth}} budgets have all been set to last week's budgeted amounts.",
+                            { displayMonth },
+                          )
+                        : t(
+                            "{{displayMonth}} budgets have all been set to last month's budgeted amounts.",
+                            { displayMonth },
+                          ),
                     });
                   }}
                   onSetBudgetsToZero={() => {
@@ -239,8 +243,11 @@ export const BudgetSummary = memo(({ month }: BudgetSummaryProps) => {
                     onBudgetAction(month, `set-${numberOfMonths}-avg`);
                     onMenuClose();
                     showUndoNotification({
-                      message:
-                        numberOfMonths === 12
+                      message: isWeekly
+                        ? t(
+                            `${displayMonth} budgets have all been set to ${numberOfMonths} week average.`,
+                          )
+                        : numberOfMonths === 12
                           ? t(
                               `${displayMonth} budgets have all been set to yearly average.`,
                             )

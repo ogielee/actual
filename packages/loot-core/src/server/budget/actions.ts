@@ -372,31 +372,59 @@ export async function setNMonthAvg({
 }: {
   month: string;
   N: number;
-  category: string;
+  category?: string;
 }): Promise<void> {
-  const categoryFromDb = await db.first<Pick<db.DbViewCategory, 'is_income'>>(
-    'SELECT is_income FROM v_categories WHERE id = ?',
-    [category],
-  );
-
-  let prevMonth = monthUtils.prevMonth(month);
-  let sumAmount = 0;
-  for (let l = 0; l < N; l++) {
-    sumAmount += await getSheetValue(
-      monthUtils.sheetForMonth(prevMonth),
-      'sum-amount-' + category,
+  if (category) {
+    const categoryFromDb = await db.first<Pick<db.DbViewCategory, 'is_income'>>(
+      'SELECT is_income FROM v_categories WHERE id = ?',
+      [category],
     );
-    prevMonth = monthUtils.prevMonth(prevMonth);
-  }
-  await batchMessages(async () => {
-    let avg = Math.round(sumAmount / N);
 
-    if (categoryFromDb.is_income === 0) {
-      avg *= -1;
+    let prevMonth = monthUtils.prevMonth(month);
+    let sumAmount = 0;
+    for (let l = 0; l < N; l++) {
+      sumAmount += await getSheetValue(
+        monthUtils.sheetForMonth(prevMonth),
+        'sum-amount-' + category,
+      );
+      prevMonth = monthUtils.prevMonth(prevMonth);
     }
-
-    void setBudget({ category, month, amount: avg });
-  });
+    await batchMessages(async () => {
+      let avg = Math.round(sumAmount / N);
+      if (categoryFromDb.is_income === 0) {
+        avg *= -1;
+      }
+      void setBudget({ category, month, amount: avg });
+    });
+  } else {
+    // Apply to all non-hidden categories
+    const categories = await db.all<db.DbViewCategoryWithGroupHidden>(
+      `SELECT c.* FROM categories c
+       LEFT JOIN category_groups g ON c.cat_group = g.id
+       WHERE c.tombstone = 0 AND c.hidden = 0 AND g.hidden = 0`,
+    );
+    await batchMessages(async () => {
+      for (const cat of categories) {
+        if (cat.is_income === 1 && !isReflectBudget()) {
+          continue;
+        }
+        let prevMonth = monthUtils.prevMonth(month);
+        let sumAmount = 0;
+        for (let l = 0; l < N; l++) {
+          sumAmount += await getSheetValue(
+            monthUtils.sheetForMonth(prevMonth),
+            'sum-amount-' + cat.id,
+          );
+          prevMonth = monthUtils.prevMonth(prevMonth);
+        }
+        let avg = Math.round(sumAmount / N);
+        if (cat.is_income === 0) {
+          avg *= -1;
+        }
+        void setBudget({ category: cat.id, month, amount: avg });
+      }
+    });
+  }
 }
 
 export async function holdForNextMonth({

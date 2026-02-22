@@ -37,6 +37,7 @@ import { useFormat } from '@desktop-client/hooks/useFormat';
 import { useNavigate } from '@desktop-client/hooks/useNavigate';
 import { useSheetName } from '@desktop-client/hooks/useSheetName';
 import { useSheetValue } from '@desktop-client/hooks/useSheetValue';
+import { useSyncedPref } from '@desktop-client/hooks/useSyncedPref';
 import { useUndo } from '@desktop-client/hooks/useUndo';
 import type { Binding, SheetFields } from '@desktop-client/spreadsheet';
 import { envelopeBudget } from '@desktop-client/spreadsheet/bindings';
@@ -231,6 +232,8 @@ export const ExpenseCategoryMonth = memo(function ExpenseCategoryMonth({
   };
 
   const { showUndoNotification } = useUndo();
+  const [budgetFrequency = 'monthly'] = useSyncedPref('budgetFrequency');
+  const isWeekly = budgetFrequency === 'weekly';
 
   const navigate = useNavigate();
 
@@ -327,14 +330,19 @@ export const ExpenseCategoryMonth = memo(function ExpenseCategoryMonth({
                     category: category.id,
                   });
                   showUndoNotification({
-                    message: t(`Budget set to last month's budget.`),
+                    message: isWeekly
+                      ? t(`Budget set to last week's budget.`)
+                      : t(`Budget set to last month's budget.`),
                   });
                 }}
                 onSetMonthsAverage={numberOfMonths => {
                   if (
                     numberOfMonths !== 3 &&
+                    numberOfMonths !== 4 &&
                     numberOfMonths !== 6 &&
-                    numberOfMonths !== 12
+                    numberOfMonths !== 12 &&
+                    numberOfMonths !== 13 &&
+                    numberOfMonths !== 52
                   ) {
                     return;
                   }
@@ -343,10 +351,14 @@ export const ExpenseCategoryMonth = memo(function ExpenseCategoryMonth({
                     category: category.id,
                   });
                   showUndoNotification({
-                    message: t(
-                      'Budget set to {{numberOfMonths}}-month average.',
-                      { numberOfMonths },
-                    ),
+                    message: isWeekly
+                      ? t('Budget set to {{n}}-week average.', {
+                          n: numberOfMonths,
+                        })
+                      : t(
+                          'Budget set to {{numberOfMonths}}-month average.',
+                          { numberOfMonths },
+                        ),
                   });
                 }}
                 onApplyBudgetTemplate={() => {
