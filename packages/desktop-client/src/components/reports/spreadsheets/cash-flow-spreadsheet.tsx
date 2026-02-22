@@ -80,9 +80,14 @@ export function cashFlowByDate(
   conditionsOp: 'and' | 'or',
   locale: Locale,
   format: (value: unknown, type?: FormatType) => string,
+  isWeekly: boolean = false,
+  firstDayOfWeekIdx: string = '0',
 ) {
-  const start = monthUtils.firstDayOfMonth(startMonth);
-  const end = monthUtils.lastDayOfMonth(endMonth);
+  // For weekly mode, startMonth/endMonth are week-start date strings (yyyy-MM-dd)
+  const start = isWeekly ? startMonth : monthUtils.firstDayOfMonth(startMonth);
+  const end = isWeekly
+    ? monthUtils.getWeekEnd(endMonth, firstDayOfWeekIdx)
+    : monthUtils.lastDayOfMonth(endMonth);
   const fixedEnd =
     end > monthUtils.currentDay() ? monthUtils.currentDay() : end;
 
@@ -108,7 +113,8 @@ export function cashFlowByDate(
           'account.offbudget': false,
         });
 
-      if (isConcise) {
+      // Weekly mode needs daily data for week aggregation
+      if (isConcise && !isWeekly) {
         return query
           .groupBy([{ $month: '$date' }, 'payee.transfer_acct'])
           .select([
@@ -140,7 +146,18 @@ export function cashFlowByDate(
         makeQuery().filter({ amount: { $lt: 0 } }),
       ],
       data => {
-        setData(recalculate(data, start, fixedEnd, isConcise, locale, format));
+        setData(
+          recalculate(
+            data,
+            start,
+            fixedEnd,
+            isConcise,
+            locale,
+            format,
+            isWeekly,
+            firstDayOfWeekIdx,
+          ),
+        );
       },
     );
   };
@@ -157,6 +174,8 @@ function recalculate(
   isConcise: boolean,
   locale: Locale,
   format: (value: unknown, type?: FormatType) => string,
+  isWeekly: boolean = false,
+  firstDayOfWeekIdx: string = '0',
 ) {
   const [startingBalance, income, expense] = data;
   const convIncome = income.map(trans => {
@@ -165,12 +184,14 @@ function recalculate(
   const convExpense = expense.map(trans => {
     return { ...trans, isTransfer: trans.isTransfer !== null };
   });
-  const dates = isConcise
-    ? monthUtils.rangeInclusive(
-        monthUtils.getMonth(start),
-        monthUtils.getMonth(end),
-      )
-    : monthUtils.dayRangeInclusive(start, end);
+  const dates = isWeekly
+    ? monthUtils.weekRangeInclusive(start, end, firstDayOfWeekIdx)
+    : isConcise
+      ? monthUtils.rangeInclusive(
+          monthUtils.getMonth(start),
+          monthUtils.getMonth(end),
+        )
+      : monthUtils.dayRangeInclusive(start, end);
   const incomes = indexCashFlow(convIncome);
   const expenses = indexCashFlow(convExpense);
 
@@ -196,13 +217,31 @@ function recalculate(
       let creditTransfers = 0;
       let debitTransfers = 0;
 
-      if (incomes[date]) {
-        income = !incomes[date].false ? 0 : incomes[date].false;
-        creditTransfers = !incomes[date].true ? 0 : incomes[date].true;
-      }
-      if (expenses[date]) {
-        expense = !expenses[date].false ? 0 : expenses[date].false;
-        debitTransfers = !expenses[date].true ? 0 : expenses[date].true;
+      if (isWeekly) {
+        // Aggregate all days in this week
+        const weekEndDate = monthUtils.getWeekEnd(date, firstDayOfWeekIdx);
+        const clampedWeekEnd = weekEndDate > end ? end : weekEndDate;
+        const daysInWeek = monthUtils.dayRangeInclusive(date, clampedWeekEnd);
+
+        for (const day of daysInWeek) {
+          if (incomes[day]) {
+            income += incomes[day].false ?? 0;
+            creditTransfers += incomes[day].true ?? 0;
+          }
+          if (expenses[day]) {
+            expense += expenses[day].false ?? 0;
+            debitTransfers += expenses[day].true ?? 0;
+          }
+        }
+      } else {
+        if (incomes[date]) {
+          income = !incomes[date].false ? 0 : incomes[date].false;
+          creditTransfers = !incomes[date].true ? 0 : incomes[date].true;
+        }
+        if (expenses[date]) {
+          expense = !expenses[date].false ? 0 : expenses[date].false;
+          debitTransfers = !expenses[date].true ? 0 : expenses[date].true;
+        }
       }
 
       totalExpenses += expense;
@@ -211,14 +250,14 @@ function recalculate(
       totalTransfers += creditTransfers + debitTransfers;
       const x = d.parseISO(date);
 
+      const labelHeader = isWeekly
+        ? `Wk ${parseInt(monthUtils.format(date, 'II'))} \u2014 ${d.format(x, 'MMM d', { locale })} \u2013 ${d.format(d.parseISO(monthUtils.getWeekEnd(date, firstDayOfWeekIdx)), 'MMM d, yyyy', { locale })}`
+        : d.format(x, isConcise ? 'MMMM yyyy' : 'MMMM d, yyyy', { locale });
+
       const label = (
         <div>
           <div style={{ marginBottom: 10 }}>
-            <strong>
-              {d.format(x, isConcise ? 'MMMM yyyy' : 'MMMM d, yyyy', {
-                locale,
-              })}
-            </strong>
+            <strong>{labelHeader}</strong>
           </div>
           <div style={{ lineHeight: 1.5 }}>
             <AlignedText

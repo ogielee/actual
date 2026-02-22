@@ -56,12 +56,14 @@ type BudgetAnalysisGraphProps = {
   graphType?: 'Line' | 'Bar';
   showBalance?: boolean;
   isConcise?: boolean;
+  isWeekly?: boolean;
 };
 
 type CustomTooltipProps = {
   active?: boolean;
   payload?: PayloadItem[];
   isConcise: boolean;
+  isWeekly: boolean;
   format: (value: unknown, type?: FormatType) => string;
   showBalance: boolean;
 };
@@ -70,6 +72,7 @@ function CustomTooltip({
   active,
   payload,
   isConcise,
+  isWeekly,
   format,
   showBalance,
 }: CustomTooltipProps) {
@@ -81,6 +84,14 @@ function CustomTooltip({
   }
 
   const [{ payload: data }] = payload;
+
+  const tooltipLabel = isWeekly
+    ? `Wk ${parseInt(monthUtils.format(data.date, 'II'))} — ${monthUtils.format(data.date, 'MMM d, yyyy', locale)}`
+    : monthUtils.format(
+        data.date,
+        isConcise ? 'MMMM yyyy' : 'MMMM dd, yyyy',
+        locale,
+      );
 
   return (
     <div
@@ -95,13 +106,7 @@ function CustomTooltip({
     >
       <div>
         <div style={{ marginBottom: 10 }}>
-          <strong>
-            {monthUtils.format(
-              data.date,
-              isConcise ? 'MMMM yyyy' : 'MMMM dd, yyyy',
-              locale,
-            )}
-          </strong>
+          <strong>{tooltipLabel}</strong>
         </div>
         <div style={{ lineHeight: 1.5 }}>
           <AlignedText
@@ -196,6 +201,7 @@ export function BudgetAnalysisGraph({
   graphType = 'Line',
   showBalance = true,
   isConcise = true,
+  isWeekly = false,
 }: BudgetAnalysisGraphProps) {
   const { t } = useTranslation();
   const format = useFormat();
@@ -212,11 +218,12 @@ export function BudgetAnalysisGraph({
   const graphData = data.intervalData;
 
   const formatDate = (date: string) => {
+    if (isWeekly) {
+      return `Wk ${parseInt(monthUtils.format(date, 'II'))}`;
+    }
     if (isConcise) {
-      // Monthly format
       return monthUtils.format(date, 'MMM', locale);
     }
-    // Daily format
     return monthUtils.format(date, 'MMM d', locale);
   };
 
@@ -258,6 +265,7 @@ export function BudgetAnalysisGraph({
               content={
                 <CustomTooltip
                   isConcise={isConcise}
+                  isWeekly={isWeekly}
                   format={format}
                   showBalance={showBalance}
                 />
@@ -320,6 +328,7 @@ export function BudgetAnalysisGraph({
               content={
                 <CustomTooltip
                   isConcise={isConcise}
+                  isWeekly={isWeekly}
                   format={format}
                   showBalance={showBalance}
                 />

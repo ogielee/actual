@@ -31,6 +31,8 @@ type createBudgetAnalysisSpreadsheetProps = {
   conditionsOp?: 'and' | 'or';
   startDate: string;
   endDate: string;
+  budgetFrequency?: 'monthly' | 'weekly';
+  firstDayOfWeekIdx?: string;
 };
 
 export function createBudgetAnalysisSpreadsheet({
@@ -38,7 +40,10 @@ export function createBudgetAnalysisSpreadsheet({
   conditionsOp = 'and',
   startDate,
   endDate,
+  budgetFrequency = 'monthly',
+  firstDayOfWeekIdx = '0',
 }: createBudgetAnalysisSpreadsheetProps) {
+  const isWeekly = budgetFrequency === 'weekly';
   return async (
     spreadsheet: ReturnType<typeof useSpreadsheet>,
     setData: (data: BudgetAnalysisData) => void,
@@ -106,23 +111,24 @@ export function createBudgetAnalysisSpreadsheet({
       categoriesToInclude = baseCategories;
     }
 
-    // Get monthly intervals (Budget Analysis only supports monthly)
-    const intervals = monthUtils.rangeInclusive(
-      monthUtils.getMonth(startDate),
-      monthUtils.getMonth(endDate),
-    );
+    // Get intervals — weekly or monthly
+    const intervals = isWeekly
+      ? monthUtils.weekRangeInclusive(startDate, endDate, firstDayOfWeekIdx)
+      : monthUtils.rangeInclusive(
+          monthUtils.getMonth(startDate),
+          monthUtils.getMonth(endDate),
+        );
 
     const intervalData: BudgetAnalysisIntervalData[] = [];
 
     // Track running balance that respects carryover flags
-    // Get the balance from the month before the start period to initialize properly
+    // Get the balance from the period before the start period to initialize properly
     let runningBalance = 0;
-    const monthBeforeStart = monthUtils.subMonths(
-      monthUtils.getMonth(startDate),
-      1,
-    );
+    const periodBeforeStart = isWeekly
+      ? monthUtils.subWeeks(intervals[0] ?? startDate, 1)
+      : monthUtils.subMonths(monthUtils.getMonth(startDate), 1);
     const prevMonthData = await send('envelope-budget-month', {
-      month: monthBeforeStart,
+      month: periodBeforeStart,
     });
 
     // Calculate the carryover from the previous month

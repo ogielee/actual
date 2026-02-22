@@ -106,11 +106,16 @@ function BudgetAnalysisInternal({ widget }: BudgetAnalysisInternalProps) {
 
   const [_firstDayOfWeekIdx] = useSyncedPref('firstDayOfWeekIdx');
   const firstDayOfWeekIdx = _firstDayOfWeekIdx || '0';
+  const [budgetFrequency = 'monthly'] = useSyncedPref('budgetFrequency');
+  const isWeekly = budgetFrequency === 'weekly';
 
-  const calculateIsConcise = (startMonth: string, endMonth: string) => {
+  const calculateIsConcise = (startPeriod: string, endPeriod: string) => {
+    // For weekly mode, the start/end are already yyyy-MM-dd strings
+    const startISO = isWeekly ? startPeriod : startPeriod + '-01';
+    const endISO = isWeekly ? endPeriod : endPeriod + '-01';
     const numDays = d.differenceInCalendarDays(
-      d.parseISO(endMonth + '-01'),
-      d.parseISO(startMonth + '-01'),
+      d.parseISO(endISO),
+      d.parseISO(startISO),
     );
     return numDays > 31 * 3;
   };
@@ -124,62 +129,118 @@ function BudgetAnalysisInternal({ widget }: BudgetAnalysisInternalProps) {
         : monthUtils.currentDay();
       setLatestTransaction(latestTransDate);
 
-      const currentMonth = monthUtils.currentMonth();
-      let earliestMonth = earliestTrans
-        ? monthUtils.monthFromDate(d.parseISO(fromDateRepr(earliestTrans.date)))
-        : currentMonth;
-      const latestTransactionMonth = latestTrans
-        ? monthUtils.monthFromDate(d.parseISO(fromDateRepr(latestTrans.date)))
-        : currentMonth;
+      if (isWeekly) {
+        const currentWeek = monthUtils.currentWeek(firstDayOfWeekIdx);
+        let earliestWeek = earliestTrans
+          ? monthUtils.weekFromDate(
+              fromDateRepr(earliestTrans.date),
+              firstDayOfWeekIdx,
+            )
+          : currentWeek;
+        const latestWeek = latestTrans
+          ? monthUtils.weekFromDate(latestTransDate, firstDayOfWeekIdx)
+          : currentWeek;
+        const latestWeekFinal =
+          latestWeek > currentWeek ? latestWeek : currentWeek;
+        const weekAgo52 = monthUtils.subWeeks(latestWeekFinal, 51);
+        if (earliestWeek > weekAgo52) {
+          earliestWeek = weekAgo52;
+        }
 
-      const latestMonth =
-        latestTransactionMonth > currentMonth
-          ? latestTransactionMonth
+        const allWeeks = monthUtils
+          .weekRangeInclusive(earliestWeek, latestWeekFinal, firstDayOfWeekIdx)
+          .map(week => ({
+            name: week,
+            pretty: `Wk ${parseInt(monthUtils.format(week, 'II'))} ${monthUtils.format(week, 'yyyy', locale)}`,
+          }))
+          .reverse();
+
+        setAllMonths(allWeeks);
+
+        if (widget?.meta?.timeFrame) {
+          const savedStart = widget.meta.timeFrame.start;
+          const savedEnd = widget.meta.timeFrame.end;
+          // If saved as week strings (length 10), use them; otherwise use recent 12 weeks
+          if (savedStart.length === 10 && savedEnd.length === 10) {
+            setStart(savedStart);
+            setEnd(savedEnd);
+            setMode(widget.meta.timeFrame.mode);
+            setIsConcise(calculateIsConcise(savedStart, savedEnd));
+          } else {
+            const defaultStart = monthUtils.subWeeks(currentWeek, 11);
+            setStart(defaultStart);
+            setEnd(currentWeek);
+            setIsConcise(calculateIsConcise(defaultStart, currentWeek));
+          }
+        } else {
+          const defaultStart = monthUtils.subWeeks(currentWeek, 11);
+          setStart(defaultStart);
+          setEnd(currentWeek);
+          setIsConcise(calculateIsConcise(defaultStart, currentWeek));
+        }
+      } else {
+        const currentMonth = monthUtils.currentMonth();
+        let earliestMonth = earliestTrans
+          ? monthUtils.monthFromDate(
+              d.parseISO(fromDateRepr(earliestTrans.date)),
+            )
+          : currentMonth;
+        const latestTransactionMonth = latestTrans
+          ? monthUtils.monthFromDate(
+              d.parseISO(fromDateRepr(latestTrans.date)),
+            )
           : currentMonth;
 
-      const yearAgo = monthUtils.subMonths(latestMonth, 12);
-      if (earliestMonth > yearAgo) {
-        earliestMonth = yearAgo;
-      }
+        const latestMonth =
+          latestTransactionMonth > currentMonth
+            ? latestTransactionMonth
+            : currentMonth;
 
-      const allMonthsData = monthUtils
-        .rangeInclusive(earliestMonth, latestMonth)
-        .map(month => ({
-          name: month,
-          pretty: monthUtils.format(month, 'MMMM, yyyy', locale),
-        }))
-        .reverse();
+        const yearAgo = monthUtils.subMonths(latestMonth, 12);
+        if (earliestMonth > yearAgo) {
+          earliestMonth = yearAgo;
+        }
 
-      setAllMonths(allMonthsData);
+        const allMonthsData = monthUtils
+          .rangeInclusive(earliestMonth, latestMonth)
+          .map(month => ({
+            name: month,
+            pretty: monthUtils.format(month, 'MMMM, yyyy', locale),
+          }))
+          .reverse();
 
-      if (widget?.meta?.timeFrame) {
-        const [calculatedStart, calculatedEnd] = calculateTimeRange(
-          widget.meta.timeFrame,
-          undefined,
-          latestTransDate,
-        );
-        setStart(calculatedStart);
-        setEnd(calculatedEnd);
-        setMode(widget.meta.timeFrame.mode);
+        setAllMonths(allMonthsData);
 
-        setIsConcise(calculateIsConcise(calculatedStart, calculatedEnd));
-      } else {
-        const [liveStart, liveEnd] = calculateTimeRange({
-          start: monthUtils.subMonths(currentMonth, 5),
-          end: currentMonth,
-          mode: 'sliding-window',
-        });
-        setStart(liveStart);
-        setEnd(liveEnd);
-
-        setIsConcise(calculateIsConcise(liveStart, liveEnd));
+        if (widget?.meta?.timeFrame) {
+          const [calculatedStart, calculatedEnd] = calculateTimeRange(
+            widget.meta.timeFrame,
+            undefined,
+            latestTransDate,
+          );
+          setStart(calculatedStart);
+          setEnd(calculatedEnd);
+          setMode(widget.meta.timeFrame.mode);
+          setIsConcise(calculateIsConcise(calculatedStart, calculatedEnd));
+        } else {
+          const [liveStart, liveEnd] = calculateTimeRange({
+            start: monthUtils.subMonths(currentMonth, 5),
+            end: currentMonth,
+            mode: 'sliding-window',
+          });
+          setStart(liveStart);
+          setEnd(liveEnd);
+          setIsConcise(calculateIsConcise(liveStart, liveEnd));
+        }
       }
     }
     void run();
-  }, [locale, widget?.meta?.timeFrame]);
+  }, [locale, widget?.meta?.timeFrame, isWeekly, firstDayOfWeekIdx]);
 
-  const startDate = start + '-01';
-  const endDate = monthUtils.getMonthEnd(end + '-01');
+  // In weekly mode, start/end are already yyyy-MM-dd week-start strings
+  const startDate = isWeekly ? start : start + '-01';
+  const endDate = isWeekly
+    ? monthUtils.getWeekEnd(end, firstDayOfWeekIdx)
+    : monthUtils.getMonthEnd(end + '-01');
 
   const getGraphData = useMemo(
     () =>
@@ -188,8 +249,17 @@ function BudgetAnalysisInternal({ widget }: BudgetAnalysisInternalProps) {
         conditionsOp,
         startDate,
         endDate,
+        budgetFrequency: budgetFrequency as 'monthly' | 'weekly',
+        firstDayOfWeekIdx,
       }),
-    [conditions, conditionsOp, startDate, endDate],
+    [
+      conditions,
+      conditionsOp,
+      startDate,
+      endDate,
+      budgetFrequency,
+      firstDayOfWeekIdx,
+    ],
   );
 
   const data = useReport('default', getGraphData);
@@ -484,6 +554,7 @@ function BudgetAnalysisInternal({ widget }: BudgetAnalysisInternalProps) {
                 graphType={graphType}
                 showBalance={showBalance}
                 isConcise={isConcise}
+                isWeekly={isWeekly}
               />
               <View style={{ marginTop: 30 }}>
                 <Trans>

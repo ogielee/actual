@@ -100,8 +100,14 @@ function CashFlowInner({ widget }: CashFlowInnerProps) {
     widget?.meta?.showBalance ?? true,
   );
   const [latestTransaction, setLatestTransaction] = useState('');
+  const [earliestTransaction, setEarliestTransaction] = useState('');
 
   const [isConcise, setIsConcise] = useState(false);
+
+  const [_firstDayOfWeekIdx] = useSyncedPref('firstDayOfWeekIdx');
+  const firstDayOfWeekIdx = _firstDayOfWeekIdx || '0';
+  const [budgetFrequency = 'monthly'] = useSyncedPref('budgetFrequency');
+  const isWeekly = budgetFrequency === 'weekly';
 
   useEffect(() => {
     const numDays = d.differenceInCalendarDays(
@@ -121,8 +127,20 @@ function CashFlowInner({ widget }: CashFlowInnerProps) {
         conditionsOp,
         locale,
         format,
+        isWeekly,
+        firstDayOfWeekIdx,
       ),
-    [start, end, isConcise, conditions, conditionsOp, locale, format],
+    [
+      start,
+      end,
+      isConcise,
+      conditions,
+      conditionsOp,
+      locale,
+      format,
+      isWeekly,
+      firstDayOfWeekIdx,
+    ],
   );
   const data = useReport('cash_flow', params);
 
@@ -140,44 +158,93 @@ function CashFlowInner({ widget }: CashFlowInnerProps) {
         latestTransaction ? latestTransaction.date : monthUtils.currentDay(),
       );
 
-      const currentMonth = monthUtils.currentMonth();
-      const earliestMonth = earliestTransaction
-        ? monthUtils.monthFromDate(d.parseISO(earliestTransaction.date))
-        : currentMonth;
-      const latestTransactionMonth = latestTransaction
-        ? monthUtils.monthFromDate(d.parseISO(latestTransaction.date))
-        : currentMonth;
+      if (isWeekly) {
+        const currentWeek = monthUtils.currentWeek(firstDayOfWeekIdx);
+        let earliestWeek = earliestTransaction
+          ? monthUtils.weekFromDate(
+              earliestTransaction.date,
+              firstDayOfWeekIdx,
+            )
+          : currentWeek;
+        const latestWeek = latestTransaction
+          ? monthUtils.weekFromDate(latestTransaction.date, firstDayOfWeekIdx)
+          : currentWeek;
+        const latestWeekFinal =
+          latestWeek > currentWeek ? latestWeek : currentWeek;
+        const weekAgo52 = monthUtils.subWeeks(latestWeekFinal, 51);
+        if (earliestWeek > weekAgo52) {
+          earliestWeek = weekAgo52;
+        }
 
-      const latestMonth =
-        latestTransactionMonth > currentMonth
-          ? latestTransactionMonth
+        const allWeeks = monthUtils
+          .weekRangeInclusive(earliestWeek, latestWeekFinal, firstDayOfWeekIdx)
+          .map(week => ({
+            name: week,
+            pretty: `Wk ${parseInt(monthUtils.format(week, 'II'))} ${monthUtils.format(week, 'yyyy', locale)}`,
+          }))
+          .reverse();
+
+        setAllMonths(allWeeks);
+      } else {
+        const currentMonth = monthUtils.currentMonth();
+        const earliestMonth = earliestTransaction
+          ? monthUtils.monthFromDate(d.parseISO(earliestTransaction.date))
+          : currentMonth;
+        const latestTransactionMonth = latestTransaction
+          ? monthUtils.monthFromDate(d.parseISO(latestTransaction.date))
           : currentMonth;
 
-      const allMonths = monthUtils
-        .rangeInclusive(earliestMonth, latestMonth)
-        .map(month => ({
-          name: month,
-          pretty: monthUtils.format(month, 'MMMM yyyy', locale),
-        }))
-        .reverse();
+        const latestMonth =
+          latestTransactionMonth > currentMonth
+            ? latestTransactionMonth
+            : currentMonth;
 
-      setAllMonths(allMonths);
+        const allMonths = monthUtils
+          .rangeInclusive(earliestMonth, latestMonth)
+          .map(month => ({
+            name: month,
+            pretty: monthUtils.format(month, 'MMMM yyyy', locale),
+          }))
+          .reverse();
+
+        setAllMonths(allMonths);
+      }
     }
     void run();
-  }, [locale]);
+  }, [locale, isWeekly, firstDayOfWeekIdx]);
 
   useEffect(() => {
     if (latestTransaction) {
-      const [initialStart, initialEnd, initialMode] = calculateTimeRange(
-        widget?.meta?.timeFrame,
-        defaultTimeFrame,
-        latestTransaction,
-      );
-      setStart(initialStart);
-      setEnd(initialEnd);
-      setMode(initialMode);
+      if (isWeekly) {
+        const currentWeek = monthUtils.currentWeek(firstDayOfWeekIdx);
+        const savedStart = widget?.meta?.timeFrame?.start;
+        const savedEnd = widget?.meta?.timeFrame?.end;
+        if (
+          savedStart?.length === 10 &&
+          savedEnd?.length === 10 &&
+          widget?.meta?.timeFrame
+        ) {
+          setStart(savedStart);
+          setEnd(savedEnd);
+          setMode(widget.meta.timeFrame.mode);
+        } else {
+          const defaultStart = monthUtils.subWeeks(currentWeek, 11);
+          setStart(defaultStart);
+          setEnd(currentWeek);
+          setMode('sliding-window');
+        }
+      } else {
+        const [initialStart, initialEnd, initialMode] = calculateTimeRange(
+          widget?.meta?.timeFrame,
+          defaultTimeFrame,
+          latestTransaction,
+        );
+        setStart(initialStart);
+        setEnd(initialEnd);
+        setMode(initialMode);
+      }
     }
-  }, [latestTransaction, widget?.meta?.timeFrame]);
+  }, [latestTransaction, widget?.meta?.timeFrame, isWeekly, firstDayOfWeekIdx]);
 
   function onChangeDates(start: string, end: string, mode: TimeFrame['mode']) {
     setStart(start);
@@ -243,10 +310,6 @@ function CashFlowInner({ widget }: CashFlowInnerProps) {
       },
     });
   };
-
-  const [earliestTransaction, setEarliestTransaction] = useState('');
-  const [_firstDayOfWeekIdx] = useSyncedPref('firstDayOfWeekIdx');
-  const firstDayOfWeekIdx = _firstDayOfWeekIdx || '0';
 
   if (!allMonths || !data) {
     return null;
